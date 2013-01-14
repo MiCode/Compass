@@ -29,7 +29,9 @@ import android.location.LocationManager;
 import android.location.LocationProvider;
 import android.os.Bundle;
 import android.os.Handler;
+import android.test.MoreAsserts;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup.LayoutParams;
 import android.view.animation.AccelerateInterpolator;
@@ -41,9 +43,14 @@ import java.util.Locale;
 
 public class CompassActivity extends Activity {
 
+    private static final int MATRIX_SIZE = 9;
     private final float MAX_ROATE_DEGREE = 1.0f;
     private SensorManager mSensorManager;
-    private Sensor mOrientationSensor;
+    // private Sensor mOrientationSensor;
+
+    private Sensor mAccelerometerSensor;
+    private Sensor mMagneticFieldSensor;
+
     private LocationManager mLocationManager;
     private String mLocationProvider;
     private float mDirection;
@@ -63,6 +70,9 @@ public class CompassActivity extends Activity {
         @Override
         public void run() {
             if (mPointer != null && !mStopDrawing) {
+
+                calculateTargetDirection();
+                
                 if (mDirection != mTargetDirection) {
 
                     // calculate the short routine
@@ -110,10 +120,23 @@ public class CompassActivity extends Activity {
         } else {
             mLocationTextView.setText(R.string.cannot_get_location);
         }
-        if (mOrientationSensor != null) {
-            mSensorManager.registerListener(mOrientationSensorEventListener, mOrientationSensor,
+
+        // if (mOrientationSensor != null) {
+        // mSensorManager.registerListener(mOrientationSensorEventListener,
+        // mOrientationSensor,
+        // SensorManager.SENSOR_DELAY_GAME);
+        // }
+
+        if (mAccelerometerSensor != null) {
+            mSensorManager.registerListener(mAccelerometerSensorEventListener, mAccelerometerSensor,
                     SensorManager.SENSOR_DELAY_GAME);
         }
+
+        if (mMagneticFieldSensor != null) {
+            mSensorManager.registerListener(mMagnetFieldSensorEventListener, mMagneticFieldSensor,
+                    SensorManager.SENSOR_DELAY_GAME);
+        }
+
         mStopDrawing = false;
         mHandler.postDelayed(mCompassViewUpdater, 20);
     }
@@ -122,9 +145,18 @@ public class CompassActivity extends Activity {
     protected void onPause() {
         super.onPause();
         mStopDrawing = true;
-        if (mOrientationSensor != null) {
-            mSensorManager.unregisterListener(mOrientationSensorEventListener);
+        // if (mOrientationSensor != null) {
+        // mSensorManager.unregisterListener(mOrientationSensorEventListener);
+        // }
+
+        if (mAccelerometerSensor != null) {
+            mSensorManager.unregisterListener(mAccelerometerSensorEventListener);
         }
+
+        if (mMagneticFieldSensor != null) {
+            mSensorManager.unregisterListener(mMagnetFieldSensorEventListener);
+        }
+
         if (mLocationProvider != null) {
             mLocationManager.removeUpdates(mLocationListener);
         }
@@ -149,7 +181,11 @@ public class CompassActivity extends Activity {
     private void initServices() {
         // sensor manager
         mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        mOrientationSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION);
+        // mOrientationSensor =
+        // mSensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION);
+
+        mAccelerometerSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        mMagneticFieldSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
 
         // location manager
         mLocationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
@@ -319,16 +355,88 @@ public class CompassActivity extends Activity {
         return String.valueOf(du) + "°" + String.valueOf(fen) + "'" + String.valueOf(miao) + "\"";
     }
 
-    private SensorEventListener mOrientationSensorEventListener = new SensorEventListener() {
+    // private SensorEventListener mOrientationSensorEventListener = new
+    // SensorEventListener() {
+    //
+    // @Override
+    // public void onSensorChanged(SensorEvent event) {
+    // float direction = event.values[0] * -1.0f;
+    // mTargetDirection = normalizeDegree(direction);
+    // }
+    //
+    // @Override
+    // public void onAccuracyChanged(Sensor sensor, int accuracy) {
+    // }
+    // };
+
+    private void calculateTargetDirection() {
+        synchronized (this) {
+            double data = Math.sqrt(Math.pow(mMagneticFieldValues[0], 2) + Math.pow(mMagneticFieldValues[1], 2)
+                    + Math.pow(mMagneticFieldValues[2], 2));
+            
+            Log.d("Compass", "data = " + data);
+            
+            if (data < 25 || data > 65) {
+                Log.d("Compass", "Warn: Calibration needed");
+            } else {
+                Log.d("Compass", "OK");
+            }
+            
+            if (mMagneticFieldValues != null && mAccelerometerValues != null) {
+                float[] R = new float[MATRIX_SIZE];
+                if (SensorManager.getRotationMatrix(R, null, mAccelerometerValues, mMagneticFieldValues)) {
+                    float[] orientation = new float[3];
+                    SensorManager.getOrientation(R, orientation);
+                    float direction = (float)Math.toDegrees(orientation[0]) * -1.0f;
+                    mTargetDirection = normalizeDegree(direction);
+                    Log.d("Compass", "mTargetDirection = " + mTargetDirection);
+                } else {
+                    Log.d("Compass", "Error: SensorManager.getRotationMatrix");
+                }
+            }
+        }
+    }
+
+    private float[] mMagneticFieldValues = new float[3];
+    private float[] mAccelerometerValues = new float[3];
+
+    private SensorEventListener mAccelerometerSensorEventListener = new SensorEventListener() {
 
         @Override
         public void onSensorChanged(SensorEvent event) {
-            float direction = event.values[0] * -1.0f;
-            mTargetDirection = normalizeDegree(direction);
+            // TODO Auto-generated method stub
+            
+//            if (event.accuracy == SensorManager.SENSOR_STATUS_UNRELIABLE) {
+//                return;
+//            }
+            
+            System.arraycopy(event.values, 0, mAccelerometerValues, 0, 3);
         }
 
         @Override
         public void onAccuracyChanged(Sensor sensor, int accuracy) {
+            // TODO Auto-generated method stub
+
+        }
+    };
+
+    private SensorEventListener mMagnetFieldSensorEventListener = new SensorEventListener() {
+
+        @Override
+        public void onSensorChanged(SensorEvent event) {
+            // TODO Auto-generated method stub
+            
+//            if (event.accuracy == SensorManager.SENSOR_STATUS_UNRELIABLE) {
+//                return;
+//            }
+            
+            System.arraycopy(event.values, 0, mMagneticFieldValues, 0, 3);            
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {
+            // TODO Auto-generated method stub
+
         }
     };
 
