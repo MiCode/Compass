@@ -17,6 +17,8 @@
 package net.micode.compass;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Context;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -66,13 +68,64 @@ public class CompassActivity extends Activity {
     LinearLayout mDirectionLayout;
     LinearLayout mAngleLayout;
 
+    private static final int DLG_CALIBRATION = 0;
+
+    private static final int MAX_ACCURATE_COUNT = 50;
+    private static final int MAX_INACCURATE_COUNT = 50;
+
+    private volatile int mAccurateCount;
+    private volatile int mInaccurateCount;
+    
+    private volatile boolean mCalibration;
+
+    private void resetAccurateCount() {
+        mAccurateCount = 0;
+    }
+    
+    private void increaseAccurateCount() {
+        mAccurateCount++;
+    }
+    
+    private void resetInaccurateCount() {
+        mInaccurateCount = 0;
+    }
+    
+    private void increaseInaccurateCount() {
+        mInaccurateCount++;
+    }
+    
+    @Override
+    protected Dialog onCreateDialog(int id) {
+        switch (id) {
+            case DLG_CALIBRATION: {
+                AlertDialog.Builder builder = new AlertDialog.Builder(this);
+                builder.setTitle("Calibration");
+                builder.setMessage("Please calibrate your compass");
+                return builder.create();
+            }
+            default:
+                return super.onCreateDialog(id);
+        }
+    }
+    
+    private void switchMode(boolean calibration) {
+        mCalibration = calibration;
+        if (calibration) {
+            showDialog(DLG_CALIBRATION);
+            resetAccurateCount();
+        } else {
+            dismissDialog(DLG_CALIBRATION);
+            resetInaccurateCount();
+        }
+    }
+
     protected Runnable mCompassViewUpdater = new Runnable() {
         @Override
         public void run() {
             if (mPointer != null && !mStopDrawing) {
 
                 calculateTargetDirection();
-                
+
                 if (mDirection != mTargetDirection) {
 
                     // calculate the short routine
@@ -373,21 +426,42 @@ public class CompassActivity extends Activity {
         synchronized (this) {
             double data = Math.sqrt(Math.pow(mMagneticFieldValues[0], 2) + Math.pow(mMagneticFieldValues[1], 2)
                     + Math.pow(mMagneticFieldValues[2], 2));
-            
+
             Log.d("Compass", "data = " + data);
-            
-            if (data < 25 || data > 65) {
-                Log.d("Compass", "Warn: Calibration needed");
+
+            if (mCalibration) {
+                if (mMagneticFieldAccuracy != SensorManager.SENSOR_STATUS_UNRELIABLE && (data >= 25 && data <= 65)) {
+                    increaseAccurateCount();
+                } else {
+                    resetAccurateCount();
+                }
+                
+                Log.d("Compass", "accurate count = " + mAccurateCount);
+                
+                if (mAccurateCount >= MAX_ACCURATE_COUNT) {
+                    switchMode(false);
+                }
+                
             } else {
-                Log.d("Compass", "OK");
+                if (mMagneticFieldAccuracy == SensorManager.SENSOR_STATUS_UNRELIABLE || (data < 25 || data > 65)) {
+                    increaseInaccurateCount();
+                } else {
+                    resetInaccurateCount();
+                }
+                
+                Log.d("Compass", "inaccurate count = " + mInaccurateCount);
+                
+                if (mInaccurateCount >= MAX_INACCURATE_COUNT) {
+                    switchMode(true);
+                }
             }
-            
+
             if (mMagneticFieldValues != null && mAccelerometerValues != null) {
                 float[] R = new float[MATRIX_SIZE];
                 if (SensorManager.getRotationMatrix(R, null, mAccelerometerValues, mMagneticFieldValues)) {
                     float[] orientation = new float[3];
                     SensorManager.getOrientation(R, orientation);
-                    float direction = (float)Math.toDegrees(orientation[0]) * -1.0f;
+                    float direction = (float) Math.toDegrees(orientation[0]) * -1.0f;
                     mTargetDirection = normalizeDegree(direction);
                     Log.d("Compass", "mTargetDirection = " + mTargetDirection);
                 } else {
@@ -397,6 +471,7 @@ public class CompassActivity extends Activity {
         }
     }
 
+    private int mMagneticFieldAccuracy = SensorManager.SENSOR_STATUS_UNRELIABLE;
     private float[] mMagneticFieldValues = new float[3];
     private float[] mAccelerometerValues = new float[3];
 
@@ -405,11 +480,11 @@ public class CompassActivity extends Activity {
         @Override
         public void onSensorChanged(SensorEvent event) {
             // TODO Auto-generated method stub
-            
-//            if (event.accuracy == SensorManager.SENSOR_STATUS_UNRELIABLE) {
-//                return;
-//            }
-            
+
+            // if (event.accuracy == SensorManager.SENSOR_STATUS_UNRELIABLE) {
+            // return;
+            // }
+
             System.arraycopy(event.values, 0, mAccelerometerValues, 0, 3);
         }
 
@@ -425,12 +500,13 @@ public class CompassActivity extends Activity {
         @Override
         public void onSensorChanged(SensorEvent event) {
             // TODO Auto-generated method stub
-            
-//            if (event.accuracy == SensorManager.SENSOR_STATUS_UNRELIABLE) {
-//                return;
-//            }
-            
-            System.arraycopy(event.values, 0, mMagneticFieldValues, 0, 3);            
+
+            // if (event.accuracy == SensorManager.SENSOR_STATUS_UNRELIABLE) {
+            // return;
+            // }
+
+            System.arraycopy(event.values, 0, mMagneticFieldValues, 0, 3);
+            mMagneticFieldAccuracy = event.accuracy;
         }
 
         @Override
