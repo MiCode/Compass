@@ -70,8 +70,8 @@ public class CompassActivity extends Activity {
 
     private static final int DLG_CALIBRATION = 0;
 
-    private static final int MAX_ACCURATE_COUNT = 50;
-    private static final int MAX_INACCURATE_COUNT = 50;
+    private static final int MAX_ACCURATE_COUNT = 20;
+    private static final int MAX_INACCURATE_COUNT = 20;
 
     private volatile int mAccurateCount;
     private volatile int mInaccurateCount;
@@ -101,6 +101,7 @@ public class CompassActivity extends Activity {
                 AlertDialog.Builder builder = new AlertDialog.Builder(this);
                 builder.setTitle("Calibration");
                 builder.setMessage("Please calibrate your compass");
+                builder.setCancelable(false);
                 return builder.create();
             }
             default:
