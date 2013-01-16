@@ -20,6 +20,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
+import android.graphics.drawable.AnimationDrawable;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -31,6 +32,7 @@ import android.location.LocationManager;
 import android.location.LocationProvider;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Vibrator;
 import android.test.MoreAsserts;
 import android.text.TextUtils;
 import android.util.Log;
@@ -40,6 +42,7 @@ import android.view.animation.AccelerateInterpolator;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.Locale;
 
@@ -60,15 +63,18 @@ public class CompassActivity extends Activity {
     private AccelerateInterpolator mInterpolator;
     protected final Handler mHandler = new Handler();
     private boolean mStopDrawing;
-    private boolean mChinease;
+    
+    private boolean mChinese;
 
-    View mCompassView;
-    CompassView mPointer;
-    TextView mLocationTextView;
-    LinearLayout mDirectionLayout;
-    LinearLayout mAngleLayout;
+    private View mCompassView;
+    private CompassView mPointer;
+    private TextView mLocationTextView;
+    private LinearLayout mDirectionLayout;
+    private LinearLayout mAngleLayout;
+    private View mViewGuide;
+    private AnimationDrawable mGuideAnimation;
+    private Vibrator mVibrator;
 
-    private static final int DLG_CALIBRATION = 0;
 
     private static final int MAX_ACCURATE_COUNT = 20;
     private static final int MAX_INACCURATE_COUNT = 20;
@@ -94,28 +100,19 @@ public class CompassActivity extends Activity {
         mInaccurateCount++;
     }
     
-    @Override
-    protected Dialog onCreateDialog(int id) {
-        switch (id) {
-            case DLG_CALIBRATION: {
-                AlertDialog.Builder builder = new AlertDialog.Builder(this);
-                builder.setTitle("Calibration");
-                builder.setMessage("Please calibrate your compass");
-                builder.setCancelable(false);
-                return builder.create();
-            }
-            default:
-                return super.onCreateDialog(id);
-        }
-    }
     
     private void switchMode(boolean calibration) {
         mCalibration = calibration;
         if (calibration) {
-            showDialog(DLG_CALIBRATION);
+            mViewGuide.setVisibility(View.VISIBLE);
+            mGuideAnimation.start();
+            
             resetAccurateCount();
         } else {
-            dismissDialog(DLG_CALIBRATION);
+            mGuideAnimation.stop();
+            mViewGuide.setVisibility(View.GONE);
+            Toast.makeText(this, R.string.calibrate_success, Toast.LENGTH_SHORT).show();
+            mVibrator.vibrate(200);
             resetInaccurateCount();
         }
     }
@@ -221,7 +218,6 @@ public class CompassActivity extends Activity {
         mTargetDirection = 0.0f;
         mInterpolator = new AccelerateInterpolator();
         mStopDrawing = true;
-        mChinease = TextUtils.equals(Locale.getDefault().getLanguage(), "zh");
 
         mCompassView = findViewById(R.id.view_compass);
         mPointer = (CompassView) findViewById(R.id.compass_pointer);
@@ -229,7 +225,15 @@ public class CompassActivity extends Activity {
         mDirectionLayout = (LinearLayout) findViewById(R.id.layout_direction);
         mAngleLayout = (LinearLayout) findViewById(R.id.layout_angle);
 
-        mPointer.setImageResource(mChinease ? R.drawable.compass_cn : R.drawable.compass);
+        mPointer.setImageResource(R.drawable.compass);
+        
+        mViewGuide = findViewById(R.id.view_guide);
+        
+        ImageView animationImage = (ImageView) findViewById(R.id.guide_animation);
+        
+        mGuideAnimation = (AnimationDrawable) animationImage.getDrawable();
+        
+        mChinese = TextUtils.equals(Locale.getDefault().getLanguage(), "zh");
     }
 
     private void initServices() {
@@ -241,6 +245,8 @@ public class CompassActivity extends Activity {
         mAccelerometerSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         mMagneticFieldSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
 
+        mVibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+        
         // location manager
         mLocationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         Criteria criteria = new Criteria();
@@ -267,28 +273,28 @@ public class CompassActivity extends Activity {
         if (direction > 22.5f && direction < 157.5f) {
             // east
             east = new ImageView(this);
-            east.setImageResource(mChinease ? R.drawable.e_cn : R.drawable.e);
+            east.setImageResource(R.drawable.e);
             east.setLayoutParams(lp);
         } else if (direction > 202.5f && direction < 337.5f) {
             // west
             west = new ImageView(this);
-            west.setImageResource(mChinease ? R.drawable.w_cn : R.drawable.w);
+            west.setImageResource(R.drawable.w);
             west.setLayoutParams(lp);
         }
 
         if (direction > 112.5f && direction < 247.5f) {
             // south
             south = new ImageView(this);
-            south.setImageResource(mChinease ? R.drawable.s_cn : R.drawable.s);
+            south.setImageResource(R.drawable.s);
             south.setLayoutParams(lp);
         } else if (direction < 67.5 || direction > 292.5f) {
             // north
             north = new ImageView(this);
-            north.setImageResource(mChinease ? R.drawable.n_cn : R.drawable.n);
+            north.setImageResource(R.drawable.n);
             north.setLayoutParams(lp);
         }
 
-        if (mChinease) {
+        if (mChinese) {
             // east/west should be before north/south
             if (east != null) {
                 mDirectionLayout.addView(east);

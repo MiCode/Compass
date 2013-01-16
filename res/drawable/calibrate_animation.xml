@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animation-list android:oneshot="false"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:duration="250" android:drawable="@drawable/calibrate_1" />
+    <item android:duration="250" android:drawable="@drawable/calibrate_2" />
+    <item android:duration="250" android:drawable="@drawable/calibrate_3" />
+    <item android:duration="250" android:drawable="@drawable/calibrate_4" />
+    <item android:duration="250" android:drawable="@drawable/calibrate_5" />
+    <item android:duration="250" android:drawable="@drawable/calibrate_6" />
+    <item android:duration="250" android:drawable="@drawable/calibrate_7" />
+</animation-list>
