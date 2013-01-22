@@ -137,7 +137,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="35dip"
-        layout="@*android:layout/transient_notification"
+        layout="@layout/transient_notification"
         android:visibility="gone" />
 
 </FrameLayout>
