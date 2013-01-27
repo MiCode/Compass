@@ -18,11 +18,11 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android">
 
     <string name="app_label">指南针</string>
-    <string name="getting_location">正在获取经纬度&#8230;</string>
-    <string name="cannot_get_location">无法获取经纬度</string>
-    <string name="location_north">北纬 %s</string>
-    <string name="location_south">南纬 %sS</string>
-    <string name="location_east">东经 %s</string>
-    <string name="location_west">西经 %s</string>
-	<string name="calibrate_success">校准成功</string>
+    <string name="getting_location">正在讀取經緯度&#8230;</string>
+    <string name="cannot_get_location">無法讀取經緯度</string>
+    <string name="location_north">北 %s</string>
+    <string name="location_south">南 %sS</string>
+    <string name="location_east">东 %s</string>
+    <string name="location_west">西 %s</string>
+	<string name="calibrate_success">校正成功</string>
 </resources>

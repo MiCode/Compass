@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
-<!-- Copyright (c) 2010-2011, The MiCode Open Source Community (www.micode.net)
+<!--
+     Copyright (c) 2010-2011, The MiCode Open Source Community (www.micode.net)
 
      Licensed under the Apache License, Version 2.0 (the "License");
      you may not use this file except in compliance with the License.
@@ -131,13 +131,26 @@
         </LinearLayout>
     </FrameLayout>
 
-    <include
-        android:id="@+id/low_accuracy_view"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="35dip"
-        layout="@*android:layout/transient_notification"
-        android:visibility="gone" />
+    <FrameLayout
+        android:id="@+id/view_guide"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:visibility="gone" >
+
+        <ImageView
+            android:id="@+id/guide_description"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="@drawable/guide" />
+
+        <ImageView
+            android:id="@+id/guide_animation"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center"
+            android:layout_marginTop="195.0dip"
+            android:src="@drawable/calibrate_animation" />
+    </FrameLayout>
 
 </FrameLayout>

@@ -17,7 +17,10 @@
 package net.micode.compass;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Context;
+import android.graphics.drawable.AnimationDrawable;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -29,21 +32,30 @@ import android.location.LocationManager;
 import android.location.LocationProvider;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Vibrator;
+import android.test.MoreAsserts;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup.LayoutParams;
 import android.view.animation.AccelerateInterpolator;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.Locale;
 
 public class CompassActivity extends Activity {
 
+    private static final int MATRIX_SIZE = 9;
     private final float MAX_ROATE_DEGREE = 1.0f;
     private SensorManager mSensorManager;
-    private Sensor mOrientationSensor;
+    // private Sensor mOrientationSensor;
+
+    private Sensor mAccelerometerSensor;
+    private Sensor mMagneticFieldSensor;
+
     private LocationManager mLocationManager;
     private String mLocationProvider;
     private float mDirection;
@@ -51,18 +63,67 @@ public class CompassActivity extends Activity {
     private AccelerateInterpolator mInterpolator;
     protected final Handler mHandler = new Handler();
     private boolean mStopDrawing;
-    private boolean mChinease;
+    
+    private boolean mChinese;
 
-    View mCompassView;
-    CompassView mPointer;
-    TextView mLocationTextView;
-    LinearLayout mDirectionLayout;
-    LinearLayout mAngleLayout;
+    private View mCompassView;
+    private CompassView mPointer;
+    private TextView mLocationTextView;
+    private LinearLayout mDirectionLayout;
+    private LinearLayout mAngleLayout;
+    private View mViewGuide;
+    private AnimationDrawable mGuideAnimation;
+    private Vibrator mVibrator;
+
+
+    private static final int MAX_ACCURATE_COUNT = 20;
+    private static final int MAX_INACCURATE_COUNT = 20;
+
+    private volatile int mAccurateCount;
+    private volatile int mInaccurateCount;
+    
+    private volatile boolean mCalibration;
+
+    private void resetAccurateCount() {
+        mAccurateCount = 0;
+    }
+    
+    private void increaseAccurateCount() {
+        mAccurateCount++;
+    }
+    
+    private void resetInaccurateCount() {
+        mInaccurateCount = 0;
+    }
+    
+    private void increaseInaccurateCount() {
+        mInaccurateCount++;
+    }
+    
+    
+    private void switchMode(boolean calibration) {
+        mCalibration = calibration;
+        if (calibration) {
+            mViewGuide.setVisibility(View.VISIBLE);
+            mGuideAnimation.start();
+            
+            resetAccurateCount();
+        } else {
+            mGuideAnimation.stop();
+            mViewGuide.setVisibility(View.GONE);
+            Toast.makeText(this, R.string.calibrate_success, Toast.LENGTH_SHORT).show();
+            mVibrator.vibrate(200);
+            resetInaccurateCount();
+        }
+    }
 
     protected Runnable mCompassViewUpdater = new Runnable() {
         @Override
         public void run() {
             if (mPointer != null && !mStopDrawing) {
+
+                calculateTargetDirection();
+
                 if (mDirection != mTargetDirection) {
 
                     // calculate the short routine
@@ -110,10 +171,23 @@ public class CompassActivity extends Activity {
         } else {
             mLocationTextView.setText(R.string.cannot_get_location);
         }
-        if (mOrientationSensor != null) {
-            mSensorManager.registerListener(mOrientationSensorEventListener, mOrientationSensor,
+
+        // if (mOrientationSensor != null) {
+        // mSensorManager.registerListener(mOrientationSensorEventListener,
+        // mOrientationSensor,
+        // SensorManager.SENSOR_DELAY_GAME);
+        // }
+
+        if (mAccelerometerSensor != null) {
+            mSensorManager.registerListener(mAccelerometerSensorEventListener, mAccelerometerSensor,
                     SensorManager.SENSOR_DELAY_GAME);
         }
+
+        if (mMagneticFieldSensor != null) {
+            mSensorManager.registerListener(mMagnetFieldSensorEventListener, mMagneticFieldSensor,
+                    SensorManager.SENSOR_DELAY_GAME);
+        }
+
         mStopDrawing = false;
         mHandler.postDelayed(mCompassViewUpdater, 20);
     }
@@ -122,9 +196,18 @@ public class CompassActivity extends Activity {
     protected void onPause() {
         super.onPause();
         mStopDrawing = true;
-        if (mOrientationSensor != null) {
-            mSensorManager.unregisterListener(mOrientationSensorEventListener);
+        // if (mOrientationSensor != null) {
+        // mSensorManager.unregisterListener(mOrientationSensorEventListener);
+        // }
+
+        if (mAccelerometerSensor != null) {
+            mSensorManager.unregisterListener(mAccelerometerSensorEventListener);
         }
+
+        if (mMagneticFieldSensor != null) {
+            mSensorManager.unregisterListener(mMagnetFieldSensorEventListener);
+        }
+
         if (mLocationProvider != null) {
             mLocationManager.removeUpdates(mLocationListener);
         }
@@ -135,7 +218,6 @@ public class CompassActivity extends Activity {
         mTargetDirection = 0.0f;
         mInterpolator = new AccelerateInterpolator();
         mStopDrawing = true;
-        mChinease = TextUtils.equals(Locale.getDefault().getLanguage(), "zh");
 
         mCompassView = findViewById(R.id.view_compass);
         mPointer = (CompassView) findViewById(R.id.compass_pointer);
@@ -143,14 +225,28 @@ public class CompassActivity extends Activity {
         mDirectionLayout = (LinearLayout) findViewById(R.id.layout_direction);
         mAngleLayout = (LinearLayout) findViewById(R.id.layout_angle);
 
-        mPointer.setImageResource(mChinease ? R.drawable.compass_cn : R.drawable.compass);
+        mPointer.setImageResource(R.drawable.compass);
+        
+        mViewGuide = findViewById(R.id.view_guide);
+        
+        ImageView animationImage = (ImageView) findViewById(R.id.guide_animation);
+        
+        mGuideAnimation = (AnimationDrawable) animationImage.getDrawable();
+        
+        mChinese = TextUtils.equals(Locale.getDefault().getLanguage(), "zh");
     }
 
     private void initServices() {
         // sensor manager
         mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        mOrientationSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION);
+        // mOrientationSensor =
+        // mSensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION);
 
+        mAccelerometerSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        mMagneticFieldSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+
+        mVibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+        
         // location manager
         mLocationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         Criteria criteria = new Criteria();
@@ -177,28 +273,28 @@ public class CompassActivity extends Activity {
         if (direction > 22.5f && direction < 157.5f) {
             // east
             east = new ImageView(this);
-            east.setImageResource(mChinease ? R.drawable.e_cn : R.drawable.e);
+            east.setImageResource(R.drawable.e);
             east.setLayoutParams(lp);
         } else if (direction > 202.5f && direction < 337.5f) {
             // west
             west = new ImageView(this);
-            west.setImageResource(mChinease ? R.drawable.w_cn : R.drawable.w);
+            west.setImageResource(R.drawable.w);
             west.setLayoutParams(lp);
         }
 
         if (direction > 112.5f && direction < 247.5f) {
             // south
             south = new ImageView(this);
-            south.setImageResource(mChinease ? R.drawable.s_cn : R.drawable.s);
+            south.setImageResource(R.drawable.s);
             south.setLayoutParams(lp);
         } else if (direction < 67.5 || direction > 292.5f) {
             // north
             north = new ImageView(this);
-            north.setImageResource(mChinease ? R.drawable.n_cn : R.drawable.n);
+            north.setImageResource(R.drawable.n);
             north.setLayoutParams(lp);
         }
 
-        if (mChinease) {
+        if (mChinese) {
             // east/west should be before north/south
             if (east != null) {
                 mDirectionLayout.addView(east);
@@ -319,16 +415,111 @@ public class CompassActivity extends Activity {
         return String.valueOf(du) + "°" + String.valueOf(fen) + "'" + String.valueOf(miao) + "\"";
     }
 
-    private SensorEventListener mOrientationSensorEventListener = new SensorEventListener() {
+    // private SensorEventListener mOrientationSensorEventListener = new
+    // SensorEventListener() {
+    //
+    // @Override
+    // public void onSensorChanged(SensorEvent event) {
+    // float direction = event.values[0] * -1.0f;
+    // mTargetDirection = normalizeDegree(direction);
+    // }
+    //
+    // @Override
+    // public void onAccuracyChanged(Sensor sensor, int accuracy) {
+    // }
+    // };
+
+    private void calculateTargetDirection() {
+        synchronized (this) {
+            double data = Math.sqrt(Math.pow(mMagneticFieldValues[0], 2) + Math.pow(mMagneticFieldValues[1], 2)
+                    + Math.pow(mMagneticFieldValues[2], 2));
+
+            Log.d("Compass", "data = " + data);
+
+            if (mCalibration) {
+                if (mMagneticFieldAccuracy != SensorManager.SENSOR_STATUS_UNRELIABLE && (data >= 25 && data <= 65)) {
+                    increaseAccurateCount();
+                } else {
+                    resetAccurateCount();
+                }
+                
+                Log.d("Compass", "accurate count = " + mAccurateCount);
+                
+                if (mAccurateCount >= MAX_ACCURATE_COUNT) {
+                    switchMode(false);
+                }
+                
+            } else {
+                if (mMagneticFieldAccuracy == SensorManager.SENSOR_STATUS_UNRELIABLE || (data < 25 || data > 65)) {
+                    increaseInaccurateCount();
+                } else {
+                    resetInaccurateCount();
+                }
+                
+                Log.d("Compass", "inaccurate count = " + mInaccurateCount);
+                
+                if (mInaccurateCount >= MAX_INACCURATE_COUNT) {
+                    switchMode(true);
+                }
+            }
+
+            if (mMagneticFieldValues != null && mAccelerometerValues != null) {
+                float[] R = new float[MATRIX_SIZE];
+                if (SensorManager.getRotationMatrix(R, null, mAccelerometerValues, mMagneticFieldValues)) {
+                    float[] orientation = new float[3];
+                    SensorManager.getOrientation(R, orientation);
+                    float direction = (float) Math.toDegrees(orientation[0]) * -1.0f;
+                    mTargetDirection = normalizeDegree(direction);
+                    Log.d("Compass", "mTargetDirection = " + mTargetDirection);
+                } else {
+                    Log.d("Compass", "Error: SensorManager.getRotationMatrix");
+                }
+            }
+        }
+    }
+
+    private int mMagneticFieldAccuracy = SensorManager.SENSOR_STATUS_UNRELIABLE;
+    private float[] mMagneticFieldValues = new float[3];
+    private float[] mAccelerometerValues = new float[3];
+
+    private SensorEventListener mAccelerometerSensorEventListener = new SensorEventListener() {
 
         @Override
         public void onSensorChanged(SensorEvent event) {
-            float direction = event.values[0] * -1.0f;
-            mTargetDirection = normalizeDegree(direction);
+            // TODO Auto-generated method stub
+
+            // if (event.accuracy == SensorManager.SENSOR_STATUS_UNRELIABLE) {
+            // return;
+            // }
+
+            System.arraycopy(event.values, 0, mAccelerometerValues, 0, 3);
         }
 
         @Override
         public void onAccuracyChanged(Sensor sensor, int accuracy) {
+            // TODO Auto-generated method stub
+
+        }
+    };
+
+    private SensorEventListener mMagnetFieldSensorEventListener = new SensorEventListener() {
+
+        @Override
+        public void onSensorChanged(SensorEvent event) {
+            // TODO Auto-generated method stub
+
+            // if (event.accuracy == SensorManager.SENSOR_STATUS_UNRELIABLE) {
+            // return;
+            // }
+
+            System.arraycopy(event.values, 0, mMagneticFieldValues, 0, 3);
+            mMagneticFieldAccuracy = event.accuracy;
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {
+            // TODO Auto-generated method stub
+
         }
     };
 
