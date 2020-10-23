@@ -130,14 +130,4 @@
             </FrameLayout>
         </LinearLayout>
     </FrameLayout>
-
-    <include
-        android:id="@+id/low_accuracy_view"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="35dip"
-        layout="@*android:layout/transient_notification"
-        android:visibility="gone" />
-
 </FrameLayout>
